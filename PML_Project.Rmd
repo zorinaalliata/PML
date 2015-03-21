@@ -1,0 +1,178 @@
+---
+title: "PML Project"
+author: "Zorina Alliata"
+date: "Saturday, March 21, 2015"
+output: html_document
+---
+
+
+GitHub repo: 
+
+RPubs: 
+
+<h1>Background Introduction</h1>
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement ??? a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+
+<h1>Data Sources</h1>
+
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project comes from this original source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
+
+<h1>Project Intended Results</h1>
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases. 
+1.Your submission should consist of a link to a Github repo with your R markdown and compiled HTML file describing your analysis. Please constrain the text of the writeup to < 2000 words and the number of figures to be less than 5. It will make it easier for the graders if you submit a repo with a gh-pages branch so the HTML page can be viewed online (and you always want to make it easy on graders :-).
+2.You should also apply your machine learning algorithm to the 20 test cases available in the test data above. Please submit your predictions in appropriate format to the programming assignment for automated grading. See the programming assignment for additional details. 
+
+<h1>Author initial note</h1>
+
+The pml.R file in the gitHub repo contains the R code for the project.
+
+<h1>Reproduceablity</h1>
+
+The following Libraries were used for this project:
+
+```{r}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+```
+
+Load the seed:
+
+```{r}
+set.seed(12345)
+```
+
+<h1>Getting the data</h1>
+
+The training data set can be found on the following URL:
+```{r}
+trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+```
+The testing data set can be found on the following URL:
+```{r}
+testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+```
+Download the data:
+
+```{r}
+# Download data.
+url_raw_training <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+file_dest_training <- "pml-training.csv"
+#download.file(url=url_raw_training, destfile=file_dest_training, method="curl")
+url_raw_testing <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+file_dest_testing <- "pml-testing.csv"
+#download.file(url=url_raw_testing, destfile=file_dest_testing, method="curl")
+
+# Import the data treating empty values as NA.
+training <- read.csv(file_dest_training, na.strings=c("NA",""), header=TRUE)
+testing <- read.csv(file_dest_testing, na.strings=c("NA",""), header=TRUE)
+```
+
+We will split the Training data set into two data sets, 60% for myTraining, 40% for myTesting:
+```{r}
+inTrain <- createDataPartition(y=training$classe, p=0.6, list=FALSE)
+myTraining <- training[inTrain, ]; myTesting <- training[-inTrain, ]
+dim(myTraining); dim(myTesting)
+```
+<h1>Cleaning the data</h1>
+
+Cleaning Variables with more than 60% NAs:
+
+```{r}
+trainingNA <- myTraining #creating a subset to iterate in loop
+for(i in 1:length(myTraining)) { #for every column in the training dataset
+        if( sum( is.na( myTraining[, i] ) ) /nrow(myTraining) >= .6 ) { #if NAs > 60% of total observations
+        for(j in 1:length(trainingNA)) {
+            if( length( grep(names(myTraining[i]), names(trainingNA)[j]) ) ==1)  { #if the columns are the same:
+                trainingNA <- trainingNA[ , -j] #Remove that column
+            }   
+        } 
+    }
+}
+
+dim(trainingNA)
+myTraining <- trainingNA
+```
+Do the same for the testing dataset:
+
+```{r}
+testingNA <- myTesting 
+for(i in 1:length(myTesting)) { 
+        if( sum( is.na( myTesting[, i] ) ) /nrow(myTesting) >= .6 ) { 
+        for(j in 1:length(testingNA)) {
+            if( length( grep(names(myTesting[i]), names(testingNA)[j]) ) ==1)  { 
+                testingNA <- testingNA[ , -j] 
+            }   
+        } 
+    }
+}
+
+dim(testingNA)
+myTesting <- testingNA
+##testing <- testing[-length(testing)]
+```
+
+
+
+<h1>Decision Tree algorithm for prediction</h1>
+```{r}
+modFitA1 <- rpart(classe ~ ., data=myTraining, method="class")
+fancyRpartPlot(modFitA1)
+```
+Predicting:
+```{r}
+predictionsA1 <- predict(modFitA1, myTesting, type = "class")
+```
+Use confusion Matrix to test results:
+```{r}
+confusionMatrix(predictionsA1, myTesting$classe)
+```
+<h1>Random Forests algorithm for prediction</h1>
+```{r}
+modFitB1 <- randomForest(classe ~. , data=myTraining)
+```
+Predicting:
+```{r}
+predictionsB1 <- predict(modFitB1, myTesting, type = "class")
+```
+Using confusion Matrix to test results:
+```{r}
+confusionMatrix(predictionsB1, myTesting$classe)
+```
+
+
+Random Forests yielded better results.
+
+<h1>Generating Files to submit as answers for the assignment:</h1>
+
+For Random Forests we use:
+```{r}
+predictionsB2 <- predict(modFitB1, testing, type = "class")
+```
+The function to generate files with predictions to submit for assignment:
+
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictionsB2)
+```
